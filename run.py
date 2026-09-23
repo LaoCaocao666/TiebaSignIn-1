@@ -17,6 +17,7 @@ BJ_TZ = timezone(timedelta(hours=8))
 
 from tieba_client import TiebaClient
 import wechat_notify
+import serverchan_notify   # 新增：Server 酱推送模块
 
 
 def _beijing_time(seconds: float):
@@ -49,6 +50,25 @@ def parse_args() -> str:
     return bduss
 
 
+def _notify(title: str, content: str) -> None:
+    """统一推送入口：企业微信 + Server 酱，任一未配置会自动跳过。"""
+    try:
+        wechat_notify.send_markdown(content)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"企业微信推送失败: {e}")
+
+    try:
+        serverchan_notify.send_markdown(content, title=title)
+    except TypeError:
+        # 兼容模块函数签名为 send_markdown(content) 的情况
+        try:
+            serverchan_notify.send_markdown(content)
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Server 酱推送失败: {e}")
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Server 酱推送失败: {e}")
+
+
 def main() -> None:
     bduss = parse_args()
     client = TiebaClient(bduss)
@@ -65,7 +85,7 @@ def main() -> None:
     forums = client.get_favorites()
     if not forums:
         logger.warning("未获取到关注的贴吧，签到结束")
-        wechat_notify.send_markdown("# 贴吧签到结果\n> 未获取到关注的贴吧，签到结束")
+        _notify("贴吧签到结果", "# 贴吧签到结果\n> 未获取到关注的贴吧，签到结束")
         return
 
     # 3. 逐个签到 (带节流与失败重试机制)
@@ -166,12 +186,12 @@ def main() -> None:
     summary_lines.append("================================")
     logger.info("\n".join(summary_lines))
 
-    # 5. 推送签到结果到企业微信群机器人（可选，未配置 WECHAT_WEBHOOK_KEY 则自动跳过）
-    wechat_notify.send_markdown(_build_wechat_content(total, stats))
+    # 6. 推送签到结果（企业微信 + Server 酱）
+    _notify("贴吧签到结果", _build_wechat_content(total, stats))
 
 
 def _build_wechat_content(total: int, stats: dict) -> str:
-    """构造推送到企业微信的 markdown 内容。"""
+    """构造推送的 markdown 内容。"""
     date_str = datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S")
     lines = [
         "# 贴吧签到结果",
@@ -191,14 +211,16 @@ if __name__ == "__main__":
     try:
         main()
     except SystemExit:
-        # 主动退出的错误（如 tbs 获取失败）也推一条到企业微信，便于排查
-        wechat_notify.send_markdown(
-            f"# 贴吧签到结果\n> {datetime.now(BJ_TZ)} 签到异常中断，请查看 Actions 运行日志"
+        # 主动退出的错误（如 tbs 获取失败）也推一条，便于排查
+        _notify(
+            "贴吧签到异常",
+            f"# 贴吧签到结果\n> {datetime.now(BJ_TZ)} 签到异常中断，请查看 Actions 运行日志",
         )
         raise
     except Exception as e:  # noqa: BLE001 - 兜底推送，避免静默失败
         logger.exception("签到过程发生未预期异常")
-        wechat_notify.send_markdown(
-            f"# 贴吧签到结果\n> {datetime.now(BJ_TZ)} 签到异常：{e}"
+        _notify(
+            "贴吧签到异常",
+            f"# 贴吧签到结果\n> {datetime.now(BJ_TZ)} 签到异常：{e}",
         )
         raise
