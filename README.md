@@ -72,6 +72,8 @@ WECHAT_WEBHOOK_KEY | 企业微信群机器人 Webhook 地址里 key= 后面那�
 
 每天早上6:30将会自动进行签到。如果配置了 WECHAT_WEBHOOK_KEY，签到结果会推送到对应的企业微信群。tieba.yml 中的 workflow-keepalive job 会自动保持该定时工作流处于启用状态。
 
+## 2026-10-28
+尝试更新readme出发平台对fork仓库的重新评估 修复工作流
 ## 2026-9-11
 
 + 增加了推送签到结果到企业微信群机器人功能
